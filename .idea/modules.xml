@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/pc5_pc6_socket_client/pc5_pc6_socket_client.iml" filepath="$PROJECT_DIR$/pc5_pc6_socket_client/pc5_pc6_socket_client.iml" />
+      <module fileurl="file://$PROJECT_DIR$/pc5_pc6_socket_server/pc5_pc6_socket_server.iml" filepath="$PROJECT_DIR$/pc5_pc6_socket_server/pc5_pc6_socket_server.iml" />
+      <module fileurl="file://$PROJECT_DIR$/pc5_pc6_socket_shared/pc5_pc6_socket_shared.iml" filepath="$PROJECT_DIR$/pc5_pc6_socket_shared/pc5_pc6_socket_shared.iml" />
+      <module fileurl="file://$PROJECT_DIR$/pc5_pc6_sockets.iml" filepath="$PROJECT_DIR$/pc5_pc6_sockets.iml" />
+    </modules>
+  </component>
+</project>

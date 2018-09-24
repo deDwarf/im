@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="pc5_pc6_socket_client" />
+        <module name="pc5_pc6_socket_server" />
+        <module name="pc5_pc6_socket_shared" />
+        <module name="pc5_pc6_sockets" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="pc5_pc6_socket_client" target="1.8" />
+      <module name="pc5_pc6_socket_server" target="1.8" />
+      <module name="pc5_pc6_socket_shared" target="1.8" />
+      <module name="pc5_pc6_sockets" target="1.8" />
+    </bytecodeTargetLevel>
+  </component>
+</project>
