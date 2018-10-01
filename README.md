@@ -1,6 +1,8 @@
-# im
+# PAD labs
 
-Petrenco Vitalina,
-Topal Egor,
-Veriga Boris,
-Racila Iulian
+__TI-154__
+__By:__
+* Petrenco Vitalina;
+* Topal Egor;
+* Veriga Boris;
+* Racila Iulian
