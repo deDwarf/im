@@ -48,7 +48,7 @@ public class Database {
         }
     }
 
-    public Map<String, String> listUsers(){
+    public Map<String, String> getUserListWithCredentials(){
         return SQLUtils.getUserList(con);
     }
 

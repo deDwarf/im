@@ -62,7 +62,7 @@ public class ClientForm extends JFrame implements WindowListener{
                         String username = login_fld.getText();
                         String password = new String(pwd_fld.getPassword());
                         LoginRequestMessage msg = new LoginRequestMessage(username, password);
-                        client.sendMessage(msg.constructMessageString());
+                        client.sendMessage(msg);
                     } catch (UnknownHostException ex) {
                         addError(Message.SERVICE_NAME, "Unable to resolve host: " +
                                 Conf.HOST_NAME, new Date().getTime());
@@ -78,7 +78,7 @@ public class ClientForm extends JFrame implements WindowListener{
             public void mouseClicked(MouseEvent e) {
                 super.mouseClicked(e);
                 Message msg  = new ServiceMessage(ServiceMessage.Type.UPDATE_ONLINE_LIST);
-                client.sendMessage(msg.constructMessageString());
+                client.sendMessage(msg);
             }
         });
 
@@ -89,7 +89,7 @@ public class ClientForm extends JFrame implements WindowListener{
                 String from = client.getUsername();
                 String to = BROADCAST_NAME.equals(currentInterlocutor) ? null : currentInterlocutor;
                 Message msg = new ChatMessage(from, to, body);
-                client.sendMessage(msg.constructMessageString());
+                client.sendMessage(msg);
                 inputPane.setText("");
                 addMyMessage(body, msg.getTimestamp());
             }
@@ -139,7 +139,7 @@ public class ClientForm extends JFrame implements WindowListener{
 
                 // update table
                 Message msge  = new ServiceMessage(ServiceMessage.Type.UPDATE_ONLINE_LIST);
-                client.sendMessage(msge.constructMessageString());
+                client.sendMessage(msge);
             }
 
             else if (msgType == ServiceMessage.Type.AUTH_FAIL
@@ -275,7 +275,7 @@ public class ClientForm extends JFrame implements WindowListener{
         }
     }
 
-    // gonna loose "unread count", but who cares
+    // will loose "unread count", but who cares
     private void updateUserTable(String[] users){
         Map<String, Integer> userCountMap = new HashMap<>();
 

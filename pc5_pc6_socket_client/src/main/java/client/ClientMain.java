@@ -8,7 +8,7 @@ public class ClientMain {
         JFrame frame = new JFrame("Client");
         ClientForm clientForm = new ClientForm();
         frame.setContentPane(clientForm.root);
-        frame.addWindowListener(clientForm);
+        //frame.addWindowListener(clientForm);
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.setResizable(false);
         frame.pack();

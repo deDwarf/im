@@ -45,7 +45,7 @@ public class Server {
         if (myThread != null){
             return;
         }
-        myThread = new MyThread();
+        myThread = new ConnectionRequestListenerThread();
         myThread.start();
     }
 
@@ -69,13 +69,13 @@ public class Server {
     }
 
     @ThreadSafe
-    public RouteStatus routeMessage(ChatMessage message){
+    public RouteStatus routeMessageAmongUsers(ChatMessage message){
         String user_to = message.getTo();
         String user_from = message.getFrom();
         if (user_to == null) {
             runningConnections.forEach((s, client) -> {
                 if (!s.equals(user_from)){
-                    client.sendMessage(message.constructMessageString());
+                    client.sendMessage(message);
                 }
             });
             return RouteStatus.SUCCESS;
@@ -85,7 +85,7 @@ public class Server {
         }
         ClientWorker destinationClient = this.runningConnections.get(user_to);
         if (destinationClient != null){
-            destinationClient.sendMessage(message.constructMessageString());
+            destinationClient.sendMessage(message);
             return RouteStatus.SUCCESS;
         }
         else {
@@ -111,37 +111,43 @@ public class Server {
 
     void onCredentialsReceived(String username, String password, ClientWorker cl){
         ServiceMessage msgTemplate = new ServiceMessage(ServiceMessage.Type.INFO);
+        // if there is already a client logged with the name 'cl' attempts to authorize, warn him.
         ClientWorker anotherClient;
         if ((anotherClient = runningConnections.get(username)) != null){
             if (anotherClient.isConnected()){
                 msgTemplate.setMsgType(ServiceMessage.Type.ERROR);
                 msgTemplate.setMessage("Someone just tried to login using your credentials. Ip: " +
                         anotherClient.getSocket().getInetAddress().toString());
-                anotherClient.sendMessage(msgTemplate.constructMessageString());
+                anotherClient.sendMessage(msgTemplate);
                 cl.close(String.format("Authorization refused. User \"%s\" is already logged in", username));
                 return;
             }
         }
+        else {
+            boolean accepted = db.checkCredentials(username, password);
+            if (!accepted){
+                cl.close("Invalid credentials");
+                return;
+            }
+            cl.setAuthorized(username);
+            addActiveConnection(username, cl);
 
-        boolean accepted = db.checkCredentials(username, password);
-        if (!accepted){
-            cl.close("Invalid credentials");
-            return;
+            // at this point we know user is valid
+            msgTemplate.setMsgType(ServiceMessage.Type.AUTH_SUCCESS);
+            msgTemplate.setMessage(username);
+            cl.sendMessage(msgTemplate);
+
+            msgTemplate.setMsgType(ServiceMessage.Type.UPDATE_ONLINE_LIST);
+            msgTemplate.setMessage(String.join(",", Arrays.asList(getOnlineUsers())));
+            sendBroadcast(msgTemplate);
         }
-        cl.setAuthorized(username);
-        addActiveConnection(username, cl);
-
-        // at this point we know user is valid
-        msgTemplate.setMsgType(ServiceMessage.Type.AUTH_SUCCESS);
-        msgTemplate.setMessage(username);
-        cl.sendMessage(msgTemplate.constructMessageString());
-
-        msgTemplate.setMsgType(ServiceMessage.Type.UPDATE_ONLINE_LIST);
-        msgTemplate.setMessage(String.join(",", Arrays.asList(getOnlineUsers())));
-        sendBroadcast(msgTemplate);
     }
 
     public void sendBroadcast(Message msg){
+        /*runningConnections.forEach((s, client) -> {
+            client.sendMessage(msg.constructMessageString());
+        });
+        */
         byte[] bytes = msg.constructMessageString().getBytes();
         DatagramPacket pkt = new DatagramPacket(bytes, bytes.length, Conf.MULTICAST_GROUP_ADDRESS, Conf.UDP_PORT);
         try {
@@ -149,13 +155,9 @@ public class Server {
         } catch (IOException e) {
             System.out.println("ERROR Failed to send broadcast message; IO exception occurred");
         }
-
-        //runningConnections.forEach((s, client) -> {
-        //    client.sendMessage(msg.constructMessageString());
-        //});
     }
 
-    class MyThread extends Thread {
+    class ConnectionRequestListenerThread extends Thread {
         @Override
         public void run() {
             while (!isInterrupted()){

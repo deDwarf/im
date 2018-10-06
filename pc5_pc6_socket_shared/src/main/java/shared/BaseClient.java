@@ -24,6 +24,8 @@ public abstract class BaseClient implements Runnable {
         }
     }
 
+    abstract protected void handleInput(String string);
+
     @Override
     public void run() {
         while (!timeToStop){
@@ -46,11 +48,9 @@ public abstract class BaseClient implements Runnable {
         this.timeToStop = true;
     }
 
-    abstract protected void handleInput(String string);
-
-    public void sendMessage(String message){
+    public void sendMessage(Message message){
         try {
-            osw.write(message);
+            osw.write(message.constructMessageString());
             osw.flush();
         } catch (IOException e) {
             try {
@@ -61,7 +61,7 @@ public abstract class BaseClient implements Runnable {
         }
     }
 
-    protected String readToTheEnd() throws IOException {
+    private String readToTheEnd() throws IOException {
         StringBuilder bldr = new StringBuilder();
         String str;
         while (!Message.MESSAGE_END.equals(str = br.readLine())) {

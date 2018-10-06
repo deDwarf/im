@@ -89,7 +89,7 @@ public class ServerMain {
                 System.out.println(helpMessage);
                 break;
             case USER_LIST:
-                Map<String, String> users = Database.getInstance().listUsers();
+                Map<String, String> users = Database.getInstance().getUserListWithCredentials();
                 if (users.isEmpty()){
                     System.out.println("No users are registered yet");
                     break;

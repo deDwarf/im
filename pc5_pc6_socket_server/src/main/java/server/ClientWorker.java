@@ -24,14 +24,14 @@ public class ClientWorker extends BaseClient {
     protected void handleInput(String input){
         Message msg = Message.tryParse(input);
         if (msg == null) {
-            serverMessageTemplate.setMessage("Unsupported format");
-            this.sendMessage(serverMessageTemplate.getMessage());
+            serverMessageTemplate.setMessage("Unsupported message format");
+            this.sendMessage(serverMessageTemplate);
             return;
         }
         if (msg instanceof LoginRequestMessage){
             if (isAuthorized){
                 serverMessageTemplate.setMessage("Illegal state. You are already logged in");
-                this.sendMessage(serverMessageTemplate.constructMessageString());
+                this.sendMessage(serverMessageTemplate);
                 return;
             }
             LoginRequestMessage lrmsg = (LoginRequestMessage)msg;
@@ -47,17 +47,19 @@ public class ClientWorker extends BaseClient {
             String[] users = Server.getInstance().getOnlineUsers();
             serverMessageTemplate.setMsgType(ServiceMessage.Type.UPDATE_ONLINE_LIST);
             serverMessageTemplate.setMessage(String.join(",", Arrays.asList(users)));
-            sendMessage(serverMessageTemplate.constructMessageString());
+            sendMessage(serverMessageTemplate);
         }
+
+        // at this point we know this should be a ChatMessage (if not - just ignore it)
         if (!(msg instanceof ChatMessage)){
-            return; // not supposed to happen
+            return;
         }
-        Server.getInstance().routeMessage((ChatMessage) msg);
+        Server.getInstance().routeMessageAmongUsers((ChatMessage) msg);
     }
 
     @Override
     protected void onIOExceptionInRun(Exception e) {
-        close("Unexpected data occurred while reading data from network");
+        close("Error while reading data from network");
     }
 
     @Override
@@ -65,7 +67,7 @@ public class ClientWorker extends BaseClient {
         super.close();
         this.serverMessageTemplate.setMsgType(ServiceMessage.Type.CONNECTION_CLOSED);
         this.serverMessageTemplate.setMessage(reason);
-        sendMessage(serverMessageTemplate.constructMessageString());
+        sendMessage(serverMessageTemplate);
         this.close();
     }
 
@@ -86,7 +88,7 @@ public class ClientWorker extends BaseClient {
     public void askForCredentials(){
         serverMessageTemplate.setMsgType(ServiceMessage.Type.REQUIRE_AUTH);
         serverMessageTemplate.setMessage(null);
-        this.sendMessage(serverMessageTemplate.constructMessageString());
+        this.sendMessage(serverMessageTemplate);
     }
 
     public void setAuthorized(String username){
