@@ -1,13 +1,15 @@
 package server;
 
+import shared.msg.ChatMessage;
+import shared.msg.Message;
 import util.SQLUtils;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class Database {
     private static final String dbFilePath = "./db/users";
@@ -23,6 +25,7 @@ public class Database {
             Class.forName("org.h2.Driver");
             con = DriverManager.getConnection("jdbc:h2:" + dbFilePath);
             SQLUtils.createUsersTableIfNotExists(con);
+            SQLUtils.createMessagesTableIfNotExists(con);
         } catch (ClassNotFoundException e) {
             throw new RuntimeException("Fatal. Unable to load DB driver class");
         } catch (SQLException e) {
@@ -49,11 +52,24 @@ public class Database {
     }
 
     public Map<String, String> getUserListWithCredentials(){
-        return SQLUtils.getUserList(con);
+        return SQLUtils.getUserWithCredentialsList(con);
+    }
+
+    public Set<String> getUserList() {
+        return SQLUtils.getUserWithCredentialsList(con).keySet();
     }
 
     public boolean checkUserExists(String username) {
         return SQLUtils.checkUserExists(con, username);
     }
 
+    public void saveMessage(Message msg, boolean delivered) {
+        if (msg instanceof ChatMessage) {
+            SQLUtils.saveMessage(con, (ChatMessage)msg, delivered);
+        }
+    }
+
+    public List<ChatMessage> getMessagesUndeliveredToUser(String username) {
+        return SQLUtils.getUndeliveredMessagesForUser(con, username);
+    }
 }

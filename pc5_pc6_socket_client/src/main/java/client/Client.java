@@ -75,11 +75,11 @@ public class Client extends BaseClient {
 
     @Override
     protected void onIOExceptionInRun(Exception e) {
+        // send message to self
         ServiceMessage msg = new ServiceMessage(ServiceMessage.Type.ERROR, e.getLocalizedMessage());
         onMessageReceived.onAction(msg);
         close();
     }
-
 
     public void setOnMessageReceived(ActionHandler onMessageReceived) {
         this.onMessageReceived = onMessageReceived;

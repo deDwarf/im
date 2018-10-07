@@ -3,7 +3,6 @@ package client;
 import org.apache.commons.lang3.ArrayUtils;
 import shared.conf.Conf;
 import shared.msg.*;
-import sun.java2d.pipe.SpanShapeRenderer;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -19,7 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ClientForm extends JFrame implements WindowListener{
+public class ClientForm extends JFrame {
     private final String BROADCAST_NAME = "broadcast";
 
     public JPanel root;
@@ -35,13 +34,13 @@ public class ClientForm extends JFrame implements WindowListener{
 
     private Client client;
     private Thread clientThread;
-    private MessageHistoryManager manager;
+    private MessageHistoryManager histManager;
     private String currentInterlocutor = BROADCAST_NAME; // default tab
 
     ClientForm() {
         super();
         prepareUserTableModel();
-        manager = new MessageHistoryManager();
+        histManager = new MessageHistoryManager();
         connect_btn.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -56,9 +55,9 @@ public class ClientForm extends JFrame implements WindowListener{
                         Socket socket = new Socket(host_add, Conf.TCP_PORT);
                         client = new Client(socket);
                         client.setOnMessageReceived(handler);
-
                         clientThread = new Thread(client);
                         clientThread.start();
+
                         String username = login_fld.getText();
                         String password = new String(pwd_fld.getPassword());
                         LoginRequestMessage msg = new LoginRequestMessage(username, password);
@@ -77,7 +76,11 @@ public class ClientForm extends JFrame implements WindowListener{
             @Override
             public void mouseClicked(MouseEvent e) {
                 super.mouseClicked(e);
-                Message msg  = new ServiceMessage(ServiceMessage.Type.UPDATE_ONLINE_LIST);
+                if (client == null) {
+                    displayErrorMsg("Unauthorized", "You need to login to get the online list");
+                    return;
+                }
+                ServiceMessage msg  = new ServiceMessage(ServiceMessage.Type.GET_USER_LIST);
                 client.sendMessage(msg);
             }
         });
@@ -85,6 +88,10 @@ public class ClientForm extends JFrame implements WindowListener{
         send_btn.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
+                if (client == null) {
+                    displayErrorMsg("Unauthorized", "You need to login to send messages");
+                    return;
+                }
                 String body = inputPane.getText();
                 String from = client.getUsername();
                 String to = BROADCAST_NAME.equals(currentInterlocutor) ? null : currentInterlocutor;
@@ -96,8 +103,6 @@ public class ClientForm extends JFrame implements WindowListener{
         });
 
         inputPane.addKeyListener(new KeyAdapter() {
-
-
             @Override
             public void keyTyped(KeyEvent e) {
                 if (e.getKeyCode() == KeyEvent.VK_ENTER){ return; }
@@ -134,16 +139,16 @@ public class ClientForm extends JFrame implements WindowListener{
 
             else if (msgType == ServiceMessage.Type.AUTH_SUCCESS) {
                 connect_btn.setText("Connected");
+
                 client.setUsername(((ServiceMessage) msg).getMessage());
                 addInfo(Message.SERVICE_NAME, "Login successful!", msg.getTimestamp());
 
                 // update table
-                Message msge  = new ServiceMessage(ServiceMessage.Type.UPDATE_ONLINE_LIST);
+                Message msge  = new ServiceMessage(ServiceMessage.Type.GET_USER_LIST);
                 client.sendMessage(msge);
             }
 
-            else if (msgType == ServiceMessage.Type.AUTH_FAIL
-                    || msgType == ServiceMessage.Type.CONNECTION_CLOSED) {
+            else if (msgType == ServiceMessage.Type.AUTH_FAIL || msgType == ServiceMessage.Type.CONNECTION_CLOSED) {
                 connect_btn.setText("Connect");
                 this.close();
                 String reason = ((ServiceMessage) msg).getMessage();
@@ -152,9 +157,20 @@ public class ClientForm extends JFrame implements WindowListener{
                 addError(Message.SERVICE_NAME, message, msg.getTimestamp());
             }
 
-            else if (msgType == ServiceMessage.Type.UPDATE_ONLINE_LIST){
+            else if (msgType == ServiceMessage.Type.GET_ONLINE_LIST){
                 String[] msgs = ((ServiceMessage) msg).getMessage().split(",");
-                updateUserTable(msgs);
+                updateUserListWithOnlineStatus(msgs);
+            }
+
+            else if (msgType == ServiceMessage.Type.GET_USER_LIST){
+                String[] msge = ((ServiceMessage) msg).getMessage().split(",");
+                updateUserTable(msge);
+
+                ServiceMessage outMsg = new ServiceMessage(ServiceMessage.Type.GET_ONLINE_LIST);
+                client.sendMessage(outMsg);
+
+                outMsg.setMsgType(ServiceMessage.Type.GET_UNDELIVERED_MESSAGES);
+                client.sendMessage(outMsg);
             }
         }
     };
@@ -177,21 +193,21 @@ public class ClientForm extends JFrame implements WindowListener{
             tabname = from;
             increaseUnreadCount(from);
         }
-        manager.add(tabname, formatText(1, from, msg, timestamp));
+        histManager.add(tabname, formatText(1, from, msg, timestamp));
     }
 
     private void addMyMessage(String msg, long timestamp){
-        manager.add(currentInterlocutor, formatText(1, "Me", msg, timestamp));
+        histManager.add(currentInterlocutor, formatText(1, "Me", msg, timestamp));
         this.addTextToPane(1, "Me", msg, timestamp);
     }
 
     private void addError(String from, String msg, long timestamp) {
-        manager.add(currentInterlocutor, formatText(2, from, msg, timestamp));
+        histManager.add(currentInterlocutor, formatText(2, from, msg, timestamp));
         this.addTextToPane(2, from, msg, timestamp);
     }
 
     private void addInfo(String from, String msg, long timestamp) {
-        manager.add(currentInterlocutor, formatText(3, from, msg, timestamp));
+        histManager.add(currentInterlocutor, formatText(3, from, msg, timestamp));
         this.addTextToPane( 3, from, msg, timestamp);
     }
 
@@ -259,49 +275,62 @@ public class ClientForm extends JFrame implements WindowListener{
         }
     }
 
-    @Override
-    public void windowClosed(WindowEvent e) {
-        close();
-    }
 
     //// --------------- TABLE --------------------------- ////
     private void increaseUnreadCount(String username) {
         DefaultTableModel model = (DefaultTableModel) userList.getModel();
         for (int i = 0; i < model.getRowCount(); i++){
             if (model.getValueAt(i, 0).equals(username)) {
-                Object obj = model.getValueAt(i, 1);
-                model.setValueAt(Integer.parseInt(obj.toString()) + 1, i, 1);
+                Object obj = model.getValueAt(i, 2);
+                model.setValueAt(Integer.parseInt(obj.toString()) + 1, i, 2);
             }
         }
     }
 
-    // will loose "unread count", but who cares
+
+    private void updateUserListWithOnlineStatus(String[] usersOnline) {
+        DefaultTableModel model = (DefaultTableModel) userList.getModel();
+        for (int i = 0; i < model.getRowCount(); i++) {
+            if (ArrayUtils.contains(usersOnline, userList.getValueAt(i, 1))) {
+                userList.setValueAt("O", i, 0);
+            }
+            else {
+                userList.setValueAt("F", i, 0);
+            }
+        }
+    }
+
     private void updateUserTable(String[] users){
+        users = ArrayUtils.add(users, 1, BROADCAST_NAME);
+        users = ArrayUtils.removeElement(users, client.getUsername());
+
         Map<String, Integer> userCountMap = new HashMap<>();
 
-        users = ArrayUtils.add(users, 0, BROADCAST_NAME);
-        users = ArrayUtils.removeElement(users, client.getUsername());
         DefaultTableModel model = (DefaultTableModel) userList.getModel();
         for (int i = model.getRowCount() - 1; i >= 0; i--) {
             userCountMap.put(
-                    (String)model.getValueAt(i, 0),
-                    (Integer)model.getValueAt(i, 1));
+                    (String)model.getValueAt(i, 1),
+                    (Integer)model.getValueAt(i, 2));
             model.removeRow(i);
         }
         for (int i = 0; i < users.length; i++) {
             int savedCount = userCountMap.get(users[i]) == null ? 0: userCountMap.get(users[i]);
-            model.addRow(new Object[]{ users[i], savedCount});
+            model.addRow(new Object[]{ "O", users[i], savedCount});
             if (users[i].equals(currentInterlocutor)){
-                userList.changeSelection(i,0, false, true);
+                userList.changeSelection(i,i, false, true);
             }
         }
-        currentInterlocutor = (String)model.getValueAt(0, 0);
+        //currentInterlocutor = (String)model.getValueAt(0, 1);
     }
 
     private void prepareUserTableModel(){
         DefaultTableModel tableModel = (DefaultTableModel) userList.getModel();
+        tableModel.addColumn("O/F");
         tableModel.addColumn("Username");
         tableModel.addColumn("Unread messages");
+
+        userList.getColumnModel().getColumn(0).setPreferredWidth(1);
+
         userList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
         userList.getSelectionModel().addListSelectionListener(e -> {
@@ -309,44 +338,13 @@ public class ClientForm extends JFrame implements WindowListener{
             if (selectedRow < 0) {
                 return;
             }
-            userList.setValueAt(0, selectedRow, 1);
-            String username = (String)userList.getModel().getValueAt(selectedRow, 0);
-            if (username.equals(currentInterlocutor)){
+            userList.setValueAt(0, selectedRow, 2);
+            String chosenUsername = (String)userList.getModel().getValueAt(selectedRow, 1);
+            if (chosenUsername.equals(currentInterlocutor)){
                 return;
             }
-            currentInterlocutor = username;
-            setTextToPane(manager.get(username));
+            currentInterlocutor = chosenUsername;
+            setTextToPane(histManager.get(chosenUsername));
         });
-    }
-
-    /// ------------------- NOT IMPLEMENTED ------------------- ////
-    @Override
-    public void windowOpened(WindowEvent e) {
-
-    }
-
-    @Override
-    public void windowClosing(WindowEvent e) {
-
-    }
-
-    @Override
-    public void windowIconified(WindowEvent e) {
-
-    }
-
-    @Override
-    public void windowDeiconified(WindowEvent e) {
-
-    }
-
-    @Override
-    public void windowActivated(WindowEvent e) {
-
-    }
-
-    @Override
-    public void windowDeactivated(WindowEvent e) {
-
     }
 }

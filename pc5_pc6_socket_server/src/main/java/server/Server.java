@@ -8,7 +8,7 @@ import util.ThreadSafe;
 
 import java.io.IOException;
 import java.net.*;
-import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -86,16 +86,21 @@ public class Server {
         ClientWorker destinationClient = this.runningConnections.get(user_to);
         if (destinationClient != null){
             destinationClient.sendMessage(message);
+            db.saveMessage(message, true);
             return RouteStatus.SUCCESS;
         }
         else {
+            db.saveMessage(message, false);
             return RouteStatus.USER_OFFLINE;
         }
     }
 
-    public String[] getOnlineUsers(){
-        Object[] objectArray = runningConnections.keySet().toArray();
-        return Arrays.copyOf(objectArray, objectArray.length, String[].class);
+    public Iterable<String> getOnlineUsers(){
+        return runningConnections.keySet();
+    }
+
+    public Iterable<String> getAllUsers(){
+        return db.getUserList();
     }
 
     public void addActiveConnection(String username, ClientWorker client){
@@ -120,7 +125,6 @@ public class Server {
                         anotherClient.getSocket().getInetAddress().toString());
                 anotherClient.sendMessage(msgTemplate);
                 cl.close(String.format("Authorization refused. User \"%s\" is already logged in", username));
-                return;
             }
         }
         else {
@@ -136,10 +140,6 @@ public class Server {
             msgTemplate.setMsgType(ServiceMessage.Type.AUTH_SUCCESS);
             msgTemplate.setMessage(username);
             cl.sendMessage(msgTemplate);
-
-            msgTemplate.setMsgType(ServiceMessage.Type.UPDATE_ONLINE_LIST);
-            msgTemplate.setMessage(String.join(",", Arrays.asList(getOnlineUsers())));
-            sendBroadcast(msgTemplate);
         }
     }
 
@@ -155,6 +155,10 @@ public class Server {
         } catch (IOException e) {
             System.out.println("ERROR Failed to send broadcast message; IO exception occurred");
         }
+    }
+
+    public Database getDb() {
+        return db;
     }
 
     class ConnectionRequestListenerThread extends Thread {

@@ -8,7 +8,7 @@ import shared.msg.ServiceMessage;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.Arrays;
+import java.util.List;
 
 public class ClientWorker extends BaseClient {
     private String username;
@@ -42,12 +42,24 @@ public class ClientWorker extends BaseClient {
             this.askForCredentials();
             return;
         }
-        if (msg instanceof ServiceMessage &&
-                ((ServiceMessage) msg).getMsgType() == ServiceMessage.Type.UPDATE_ONLINE_LIST) {
-            String[] users = Server.getInstance().getOnlineUsers();
-            serverMessageTemplate.setMsgType(ServiceMessage.Type.UPDATE_ONLINE_LIST);
-            serverMessageTemplate.setMessage(String.join(",", Arrays.asList(users)));
-            sendMessage(serverMessageTemplate);
+        if (msg instanceof ServiceMessage) {
+            ServiceMessage.Type msgType = ((ServiceMessage) msg).getMsgType();
+            if (msgType == ServiceMessage.Type.GET_ONLINE_LIST) {
+                Iterable<String> users = Server.getInstance().getOnlineUsers();
+                serverMessageTemplate.setMsgType(msgType);
+                serverMessageTemplate.setMessage(String.join(",", users));
+                sendMessage(serverMessageTemplate);
+            }
+            else if (msgType == ServiceMessage.Type.GET_USER_LIST) {
+                Iterable<String> users = Server.getInstance().getAllUsers();
+                serverMessageTemplate.setMsgType(msgType);
+                serverMessageTemplate.setMessage(String.join(",", users));
+                sendMessage(serverMessageTemplate);
+            }
+            else if (msgType == ServiceMessage.Type.GET_UNDELIVERED_MESSAGES) {
+                List<ChatMessage> msgs = Server.getInstance().getDb().getMessagesUndeliveredToUser(username);
+                msgs.forEach(this::sendMessage);
+            }
         }
 
         // at this point we know this should be a ChatMessage (if not - just ignore it)
