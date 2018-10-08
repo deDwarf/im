@@ -51,12 +51,26 @@ public class Database {
         }
     }
 
+    public boolean registerGroup(String groupName) {
+        boolean groupExists;
+        groupExists = SQLUtils.checkUserExists(con, groupName);
+        if (groupExists){
+            return false;
+        }
+        SQLUtils.addGroup(con, groupName);
+        return true;
+    }
+
     public Map<String, String> getUserListWithCredentials(){
         return SQLUtils.getUserWithCredentialsList(con);
     }
 
     public Set<String> getUserList() {
         return SQLUtils.getUserWithCredentialsList(con).keySet();
+    }
+
+    public Set<String> getGroupList() {
+        return SQLUtils.getGroups(con);
     }
 
     public boolean checkUserExists(String username) {

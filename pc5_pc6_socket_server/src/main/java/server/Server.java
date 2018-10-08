@@ -1,5 +1,6 @@
 package server;
 
+import shared.IClient;
 import shared.conf.Conf;
 import shared.msg.ChatMessage;
 import shared.msg.Message;
@@ -8,8 +9,10 @@ import util.ThreadSafe;
 
 import java.io.IOException;
 import java.net.*;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Server {
@@ -19,7 +22,8 @@ public class Server {
 
     public static final Server INSTANCE = new Server();
 
-    private Map<String, ClientWorker> runningConnections;
+    private Map<String, IClient> runningConnections;
+    private Map<String, GroupClient> groups;
     private ServerSocket serverSocket;
     private DatagramSocket multicastSocket;
     private Thread myThread;
@@ -45,6 +49,9 @@ public class Server {
         if (myThread != null){
             return;
         }
+        this.groups = new HashMap<>();
+        db.getGroupList().forEach(s -> this.groups.put(s, new GroupClient(s)));
+        runningConnections.putAll(this.groups);
         myThread = new ConnectionRequestListenerThread();
         myThread.start();
     }
@@ -59,13 +66,15 @@ public class Server {
             new Socket(InetAddress.getLocalHost(), Conf.TCP_PORT);
             myThread.join(3000);
             serverSocket.close();
-            runningConnections.forEach((s, client) -> {
-                client.close("Server is shutting down");
-            });
+            runningConnections.forEach((s, client) -> client.close("Server is shutting down"));
         } catch (InterruptedException | IOException e) {
             // do nothing
         }
         myThread = null;
+    }
+
+    public Map<String, GroupClient> getGroups() {
+        return groups;
     }
 
     @ThreadSafe
@@ -83,7 +92,7 @@ public class Server {
         if (!db.checkUserExists(user_to)){
             return RouteStatus.USER_DOES_NOT_EXISTS;
         }
-        ClientWorker destinationClient = this.runningConnections.get(user_to);
+        IClient destinationClient = this.runningConnections.get(user_to);
         if (destinationClient != null){
             destinationClient.sendMessage(message);
             db.saveMessage(message, true);
@@ -117,12 +126,12 @@ public class Server {
     void onCredentialsReceived(String username, String password, ClientWorker cl){
         ServiceMessage msgTemplate = new ServiceMessage(ServiceMessage.Type.INFO);
         // if there is already a client logged with the name 'cl' attempts to authorize, warn him.
-        ClientWorker anotherClient;
+        IClient anotherClient;
         if ((anotherClient = runningConnections.get(username)) != null){
             if (anotherClient.isConnected()){
                 msgTemplate.setMsgType(ServiceMessage.Type.ERROR);
                 msgTemplate.setMessage("Someone just tried to login using your credentials. Ip: " +
-                        anotherClient.getSocket().getInetAddress().toString());
+                        anotherClient.getAddress());
                 anotherClient.sendMessage(msgTemplate);
                 cl.close(String.format("Authorization refused. User \"%s\" is already logged in", username));
             }

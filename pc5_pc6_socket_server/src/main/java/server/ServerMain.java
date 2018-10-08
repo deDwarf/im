@@ -5,6 +5,7 @@ import shared.msg.ServiceMessage;
 
 import java.util.Map;
 import java.util.Scanner;
+import java.util.Set;
 
 import static server.ServerMain.Options.*;
 
@@ -12,11 +13,13 @@ public class ServerMain {
     enum Options {
         START("start", "starts the server"),
         STOP("stop", "stops the server"),
-        REGISTER("register", "request for uname/password and register a new user"),
+        REGISTER_USER("register", "request for uname/password and register a new user"),
         HELP("help", "print this message"),
-        USER_LIST("userlist", "print list of available users"),
+        USER_LIST("userlist", "print list of registered users"),
+        GROUP_LIST("grouplist", "print list of registered groups"),
         EAVESDROP("eavesdrop", "eavesdrop on clients"),
         SEND_BROADCAST("broadcast", "broadcast message to all clients"),
+        CREATE_GROUP("create_group", "creates a group"),
         EXIT("exit", "terminate this program and exit");
 
         public final String name;
@@ -45,10 +48,10 @@ public class ServerMain {
         }
     }
 
-    boolean stopFlag = false;
-    Server server = Server.getInstance();
-    Scanner scanner = new Scanner(System.in);
-    String helpMessage = "+++ Yet Another Chat App +++\r\n" + constructHelpMessage();
+    private boolean stopFlag = false;
+    private Server server = Server.getInstance();
+    private Scanner scanner = new Scanner(System.in);
+    private String helpMessage = "+++ Yet Another Chat App +++\r\n" + constructHelpMessage();
 
     public static void main(String[] args) {
         ServerMain main = new ServerMain();
@@ -101,11 +104,24 @@ public class ServerMain {
                 });
                 System.out.println();
                 break;
+            case GROUP_LIST:
+                Set<String> groups = Database.getInstance().getGroupList();
+                if (groups.isEmpty()){
+                    System.out.println("No groups are registered yet");
+                    break;
+                }
+                System.out.println("Group list:");
+                final int[] counter1 = {1};
+                groups.forEach((s) -> {
+                    System.out.printf("%d) name: \"%s\"\r\n", counter1[0]++, s);
+                });
+                System.out.println();
+                break;
             case EXIT:
                 server.stop();
                 this.stopFlag = true;
                 break;
-            case REGISTER:
+            case REGISTER_USER:
                 String username;
                 String password;
                 System.out.print("Enter username: ");
@@ -113,12 +129,26 @@ public class ServerMain {
                 System.out.print("Enter password: ");
                 password = scanner.nextLine();
                 boolean result = Database.getInstance().registerUser(username, password);
+
+                System.out.println();
                 if (!result){
-                    System.out.println();
                     System.out.println("Reg failed. An user with such name already exists");
                 }
                 else {
-                    System.out.println();
+                    System.out.println("Success!");
+                }
+                break;
+            case CREATE_GROUP:
+                String groupName;
+                System.out.print("Enter group name to register: ");
+                groupName = scanner.nextLine();
+                boolean res = Database.getInstance().registerGroup(groupName);
+
+                System.out.println();
+                if (!res){
+                    System.out.println("Cannot create group as there is already a user/group with given name");
+                }
+                else {
                     System.out.println("Success!");
                 }
                 break;

@@ -5,6 +5,7 @@ public class ChatMessage extends Message {
 
     private String from;
     private String to;
+    private String destinationChat;
     private String messageBody;
 
     public ChatMessage(String from, String messageBody) {
@@ -12,9 +13,10 @@ public class ChatMessage extends Message {
         this.messageBody = messageBody;
     }
 
-    public ChatMessage(String from, String to, String messageBody) {
+    public ChatMessage(String from, String to, String destinationChat, String messageBody) {
         this.from = from;
         this.to = to;
+        this.destinationChat = destinationChat;
         this.messageBody = messageBody;
     }
 
@@ -49,6 +51,14 @@ public class ChatMessage extends Message {
 
     public void setTo(String to) {
         this.to = to;
+    }
+
+    public String getDestinationChat() {
+        return destinationChat;
+    }
+
+    public void setDestinationChat(String destinationChat) {
+        this.destinationChat = destinationChat;
     }
 
     public String getMessageBody() {

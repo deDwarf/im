@@ -5,7 +5,7 @@ import shared.msg.Message;
 import java.io.*;
 import java.net.Socket;
 
-public abstract class BaseClient implements Runnable {
+public abstract class BaseClient implements Runnable, IClient {
     protected String username;
     protected Socket mySocket;
     protected boolean timeToStop;
@@ -26,6 +26,8 @@ public abstract class BaseClient implements Runnable {
 
     abstract protected void handleInput(String string);
 
+    protected void onIOExceptionInRun(Exception e){}
+
     @Override
     public void run() {
         while (!timeToStop){
@@ -38,16 +40,17 @@ public abstract class BaseClient implements Runnable {
         }
     }
 
-    protected void onIOExceptionInRun(Exception e){}
-
+    @Override
     public void close(String reason){
         this.timeToStop = true;
     }
 
+    @Override
     public void close() {
         this.timeToStop = true;
     }
 
+    @Override
     public void sendMessage(Message message){
         try {
             osw.write(message.constructMessageString());
@@ -61,16 +64,17 @@ public abstract class BaseClient implements Runnable {
         }
     }
 
-    private String readToTheEnd() throws IOException {
-        StringBuilder bldr = new StringBuilder();
-        String str;
-        while (!Message.MESSAGE_END.equals(str = br.readLine())) {
-            bldr.append(str).append("\r\n");
-        }
-        bldr.append(str);
-        return bldr.toString();
+    @Override
+    public String getAddress() {
+        return mySocket.getInetAddress().toString();
     }
 
+    @Override
+    public String getName() {
+        return username;
+    }
+
+    @Override
     public boolean isConnected(){
         if (mySocket.isClosed()){
             this.close();
@@ -79,11 +83,13 @@ public abstract class BaseClient implements Runnable {
         return true;
     }
 
-    public Socket getSocket() {
-        return mySocket;
-    }
-
-    public String getUsername() {
-        return username;
+    private String readToTheEnd() throws IOException {
+        StringBuilder bldr = new StringBuilder();
+        String str;
+        while (!Message.MESSAGE_END.equals(str = br.readLine())) {
+            bldr.append(str).append("\r\n");
+        }
+        bldr.append(str);
+        return bldr.toString();
     }
 }

@@ -28,7 +28,7 @@ public class MessageTest {
 
     @Test
     void constructMessageString(){
-        Message msg = new ChatMessage("Egor", "Vitalina", "Hi there!");
+        Message msg = new ChatMessage("Egor", "Vitalina", "Egor", "Hi there!");
         String str = msg.constructMessageString();
         System.out.println(str);
 
@@ -43,7 +43,7 @@ public class MessageTest {
 
     @Test
     void tryParseTest(){
-        Message msg = new ChatMessage("Egor", "Vitalina", "Hi there!");
+        Message msg = new ChatMessage("Egor", "Vitalina", "Egor", "Hi there!");
         String str = msg.constructMessageString();
         Assert.assertTrue(Message.tryParse(str) instanceof ChatMessage);
 

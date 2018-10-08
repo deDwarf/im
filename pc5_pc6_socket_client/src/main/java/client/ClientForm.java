@@ -26,11 +26,12 @@ public class ClientForm extends JFrame {
     private JButton refresh_ulist_btn;
     private JTextField login_fld;
     private JPasswordField pwd_fld;
-    private JTable userList;
+    private JTable contactsTable;
     private JTextPane inputPane;
     private JTextPane outputPane;
     private JButton send_btn;
     private JScrollPane outputPaneScrollParent;
+    private JButton subscribeBtn;
 
     private Client client;
     private Thread clientThread;
@@ -93,9 +94,10 @@ public class ClientForm extends JFrame {
                     return;
                 }
                 String body = inputPane.getText();
-                String from = client.getUsername();
+                String from = client.getName();
+                String destChat = client.getName();
                 String to = BROADCAST_NAME.equals(currentInterlocutor) ? null : currentInterlocutor;
-                Message msg = new ChatMessage(from, to, body);
+                Message msg = new ChatMessage(from, to, destChat, body);
                 client.sendMessage(msg);
                 inputPane.setText("");
                 addMyMessage(body, msg.getTimestamp());
@@ -118,13 +120,35 @@ public class ClientForm extends JFrame {
                 }
             }
         });
-        //updateUserTable(new String[]{});
+
+        subscribeBtn.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (subscribeBtn.getText().equals("Subscribe")) {
+                    ServiceMessage outMsg = new ServiceMessage(ServiceMessage.Type.SUBSCRIBE_GROUP);
+                    outMsg.setMessage(currentInterlocutor);
+                    client.sendMessage(outMsg);
+                }
+                else {
+                    ServiceMessage outMsg = new ServiceMessage(ServiceMessage.Type.UNSUBSCRIBE_GROUP);
+                    outMsg.setMessage(currentInterlocutor);
+                    client.sendMessage(outMsg);
+                }
+            }
+        });
+        //updateUsersTableWithUsers(new String[]{});
     }
 
     Client.ActionHandler handler = msg -> {
         if (msg instanceof ChatMessage) {
             String from = ((ChatMessage)msg).getFrom();
-            addMessage(from, ((ChatMessage)msg).getTo(), ((ChatMessage)msg).getMessageBody(), msg.getTimestamp());
+            addMessage(
+                    from,
+                    ((ChatMessage)msg).getTo(),
+                    ((ChatMessage) msg).getDestinationChat(),
+                    ((ChatMessage)msg).getMessageBody(),
+                    msg.getTimestamp()
+            );
         }
         if (msg instanceof ServiceMessage) {
             ServiceMessage.Type msgType = ((ServiceMessage) msg).getMsgType();
@@ -132,11 +156,9 @@ public class ClientForm extends JFrame {
             if (msgType == ServiceMessage.Type.REQUIRE_AUTH) {
                 addError(Message.SERVICE_NAME, "Server requested you to login", msg.getTimestamp());
             }
-
             else if (msgType == ServiceMessage.Type.INFO || msgType == ServiceMessage.Type.ERROR) {
                 addInfo(Message.SERVICE_NAME, ((ServiceMessage) msg).getMessage(), msg.getTimestamp());
             }
-
             else if (msgType == ServiceMessage.Type.AUTH_SUCCESS) {
                 connect_btn.setText("Connected");
 
@@ -147,7 +169,6 @@ public class ClientForm extends JFrame {
                 Message msge  = new ServiceMessage(ServiceMessage.Type.GET_USER_LIST);
                 client.sendMessage(msge);
             }
-
             else if (msgType == ServiceMessage.Type.AUTH_FAIL || msgType == ServiceMessage.Type.CONNECTION_CLOSED) {
                 connect_btn.setText("Connect");
                 this.close();
@@ -156,26 +177,51 @@ public class ClientForm extends JFrame {
                         ((reason != null) ? " For reason: " + reason: "");
                 addError(Message.SERVICE_NAME, message, msg.getTimestamp());
             }
-
             else if (msgType == ServiceMessage.Type.GET_ONLINE_LIST){
                 String[] msgs = ((ServiceMessage) msg).getMessage().split(",");
                 updateUserListWithOnlineStatus(msgs);
             }
-
+            else if (msgType == ServiceMessage.Type.GET_GROUP_LIST) {
+                String[] msgs = ((ServiceMessage) msg).getMessage().split(",");
+                updateUsersTableWithGroups(msgs);
+            }
             else if (msgType == ServiceMessage.Type.GET_USER_LIST){
                 String[] msge = ((ServiceMessage) msg).getMessage().split(",");
-                updateUserTable(msge);
+                updateUsersTableWithUsers(msge);
 
                 ServiceMessage outMsg = new ServiceMessage(ServiceMessage.Type.GET_ONLINE_LIST);
                 client.sendMessage(outMsg);
 
                 outMsg.setMsgType(ServiceMessage.Type.GET_UNDELIVERED_MESSAGES);
                 client.sendMessage(outMsg);
+
+                outMsg.setMsgType(ServiceMessage.Type.GET_GROUP_LIST);
+                client.sendMessage(outMsg);
+            }
+            else if (msgType == ServiceMessage.Type.SUBSCRIBE_GROUP) {
+                this.updateGroupSubscribeStatus(((ServiceMessage) msg).getMessage(), true);
+            }
+            else if (msgType == ServiceMessage.Type.UNSUBSCRIBE_GROUP) {
+                this.updateGroupSubscribeStatus(((ServiceMessage) msg).getMessage(), false);
             }
         }
     };
 
-    private void addMessage(String from, String to, String msg, long timestamp) {
+    public void displayErrorMsg(String title, String text) {
+        JOptionPane.showMessageDialog(new JFrame(), text, title,
+                JOptionPane.ERROR_MESSAGE);
+    }
+
+    private void close(){
+        try {
+            client.close();
+            clientThread = null;
+            System.out.println("Done!");
+        } catch (Exception ex){
+        }
+    }
+
+    private void addMessage(String from, String to, String destChat, String msg, long timestamp) {
         String tabname;
         if (to == null && BROADCAST_NAME.equals(currentInterlocutor)) {
             tabname = BROADCAST_NAME;
@@ -185,13 +231,13 @@ public class ClientForm extends JFrame {
             tabname = BROADCAST_NAME;
             increaseUnreadCount(BROADCAST_NAME);
         }
-        else if (from.equals(currentInterlocutor)){
-            tabname = from;
+        else if (destChat.equals(currentInterlocutor)){
+            tabname = destChat;
             this.addTextToPane(1, from, msg, timestamp);
         }
         else {
-            tabname = from;
-            increaseUnreadCount(from);
+            tabname = destChat;
+            increaseUnreadCount(destChat);
         }
         histManager.add(tabname, formatText(1, from, msg, timestamp));
     }
@@ -221,10 +267,14 @@ public class ClientForm extends JFrame {
         return String.format(patterns[type-1], df.format(new Date(timestamp)), from, msg);
     }
 
+    public void addTextToPane(int type, String from, String msg, long timestamp){
+        addTextToPane(type, from, from, msg, timestamp);
+    }
+
     // 1 - message
     // 2 - error
     // 3 - info
-    public void addTextToPane(int type, String from, String msg, long timestamp){
+    public void addTextToPane(int type, String from, String destChat, String msg, long timestamp){
         SwingUtilities.invokeLater(()-> {
                 HTMLDocument doc = (HTMLDocument) outputPane.getStyledDocument();
                 try {
@@ -260,91 +310,137 @@ public class ClientForm extends JFrame {
         );
     }
 
-    public void  displayErrorMsg(String title, String text) {
-        JOptionPane.showMessageDialog(new JFrame(), text, title,
-                JOptionPane.ERROR_MESSAGE);
-    }
-
-    private void close(){
-        try {
-            client.close();
-            //clientThread.join();
-            clientThread = null;
-            System.out.println("Done!");
-        } catch (Exception ex){
-        }
-    }
-
-
     //// --------------- TABLE --------------------------- ////
     private void increaseUnreadCount(String username) {
-        DefaultTableModel model = (DefaultTableModel) userList.getModel();
+        DefaultTableModel model = (DefaultTableModel) contactsTable.getModel();
         for (int i = 0; i < model.getRowCount(); i++){
-            if (model.getValueAt(i, 0).equals(username)) {
-                Object obj = model.getValueAt(i, 2);
-                model.setValueAt(Integer.parseInt(obj.toString()) + 1, i, 2);
+            if (model.getValueAt(i, 2).equals(username)) { // Name
+                Object obj = model.getValueAt(i, 3); // Unread
+                model.setValueAt(Integer.parseInt(obj.toString()) + 1, i, 3); // Unread
             }
         }
     }
 
 
     private void updateUserListWithOnlineStatus(String[] usersOnline) {
-        DefaultTableModel model = (DefaultTableModel) userList.getModel();
+        DefaultTableModel model = (DefaultTableModel) contactsTable.getModel();
         for (int i = 0; i < model.getRowCount(); i++) {
-            if (ArrayUtils.contains(usersOnline, userList.getValueAt(i, 1))) {
-                userList.setValueAt("O", i, 0);
+            if (ArrayUtils.contains(usersOnline, contactsTable.getValueAt(i, 2))) { // Name
+                contactsTable.setValueAt("On", i, 0);
             }
             else {
-                userList.setValueAt("F", i, 0);
+                contactsTable.setValueAt("Off", i, 0);
             }
         }
     }
 
-    private void updateUserTable(String[] users){
+    private void updateGroupSubscribeStatus(String groupName, boolean status) {
+        DefaultTableModel model = (DefaultTableModel) contactsTable.getModel();
+        for (int i = 0; i < model.getRowCount(); i++) {
+            if (groupName.equals(contactsTable.getValueAt(i, 2))) { // Name
+                if (status) {
+                    contactsTable.setValueAt("Subscribed", i, 0);
+                    if (currentInterlocutor.equals(groupName)) {
+                        subscribeBtn.setText("Unsubscribe");
+                    }
+                }
+                else {
+                    contactsTable.setValueAt("Unsubscribed", i, 0);
+                    if (currentInterlocutor.equals(groupName)) {
+                        subscribeBtn.setText("Subscribe");
+                    }
+                }
+            }
+        }
+    }
+
+    private void updateUsersTableWithUsers(String[] users){
         users = ArrayUtils.add(users, 1, BROADCAST_NAME);
-        users = ArrayUtils.removeElement(users, client.getUsername());
+        users = ArrayUtils.removeElement(users, client.getName());
 
         Map<String, Integer> userCountMap = new HashMap<>();
-
-        DefaultTableModel model = (DefaultTableModel) userList.getModel();
+        DefaultTableModel model = (DefaultTableModel) contactsTable.getModel();
         for (int i = model.getRowCount() - 1; i >= 0; i--) {
-            userCountMap.put(
-                    (String)model.getValueAt(i, 1),
-                    (Integer)model.getValueAt(i, 2));
-            model.removeRow(i);
+            if (contactsTable.getValueAt(i, 1) == "User") { // Type column
+                userCountMap.put(
+                        (String)model.getValueAt(i, 2),
+                        (Integer)model.getValueAt(i, 3));
+                model.removeRow(i);
+            }
         }
         for (int i = 0; i < users.length; i++) {
             int savedCount = userCountMap.get(users[i]) == null ? 0: userCountMap.get(users[i]);
-            model.addRow(new Object[]{ "O", users[i], savedCount});
+
+            model.addRow(new Object[]{ "Off", "User", users[i], savedCount});
             if (users[i].equals(currentInterlocutor)){
-                userList.changeSelection(i,i, false, true);
+                contactsTable.changeSelection(i,i, false, true);
             }
         }
-        //currentInterlocutor = (String)model.getValueAt(0, 1);
+    }
+
+    private void updateUsersTableWithGroups(String[] groups){
+        Map<String, Integer> groupToUnreadMap = new HashMap<>();
+        Map<String, String> groupToStatusMap = new HashMap<>();
+        DefaultTableModel model = (DefaultTableModel) contactsTable.getModel();
+        for (int i = model.getRowCount() - 1; i >= 0; i--) {
+            if (contactsTable.getValueAt(i, 1) == "Group") { // Type column
+                groupToUnreadMap.put(
+                        (String)model.getValueAt(i, 2),
+                        (Integer)model.getValueAt(i, 3));
+                groupToStatusMap.put(
+                        (String)model.getValueAt(i, 2),
+                        (String)model.getValueAt(i, 1));
+                model.removeRow(i);
+            }
+        }
+        for (int i = 0; i < groups.length; i++) {
+            int savedCount = groupToUnreadMap.get(groups[i]) == null
+                    ? 0: groupToUnreadMap.get(groups[i]);
+            String savedStatus = groupToStatusMap.get(groups[i]) == null
+                    ? "Unsubscribed": groupToStatusMap.get(groups[i]);
+
+            model.addRow(new Object[]{ savedStatus, "Group", groups[i], savedCount });
+            if (groups[i].equals(currentInterlocutor)){
+                contactsTable.changeSelection(i, i, false, true);
+            }
+        }
     }
 
     private void prepareUserTableModel(){
-        DefaultTableModel tableModel = (DefaultTableModel) userList.getModel();
-        tableModel.addColumn("O/F");
+        DefaultTableModel tableModel = (DefaultTableModel) contactsTable.getModel();
+        tableModel.addColumn("Status");
+        tableModel.addColumn("Type");
         tableModel.addColumn("Username");
-        tableModel.addColumn("Unread messages");
+        tableModel.addColumn("Unread");
 
-        userList.getColumnModel().getColumn(0).setPreferredWidth(1);
+        contactsTable.getColumnModel().getColumn(0).setPreferredWidth(1);
 
-        userList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-
-        userList.getSelectionModel().addListSelectionListener(e -> {
-            int selectedRow = userList.getSelectedRow();
+        contactsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        contactsTable.getSelectionModel().addListSelectionListener(e -> {
+            int selectedRow = contactsTable.getSelectedRow();
             if (selectedRow < 0) {
                 return;
             }
-            userList.setValueAt(0, selectedRow, 2);
-            String chosenUsername = (String)userList.getModel().getValueAt(selectedRow, 1);
-            if (chosenUsername.equals(currentInterlocutor)){
+            String chosenInterlocutor = (String) contactsTable.getModel().getValueAt(selectedRow, 2);
+            if (chosenInterlocutor.equals(currentInterlocutor)){
                 return;
             }
-            currentInterlocutor = chosenUsername;
-            setTextToPane(histManager.get(chosenUsername));
+
+            contactsTable.setValueAt(0, selectedRow, 3);
+            currentInterlocutor = chosenInterlocutor;
+            setTextToPane(histManager.get(chosenInterlocutor));
+
+            if (contactsTable.getValueAt(selectedRow, 1).equals("Group")) {
+                this.subscribeBtn.setVisible(true);
+                if (contactsTable.getValueAt(selectedRow, 0).equals("Subscribed")) {
+                    this.subscribeBtn.setText("Unsubscribe");
+                }
+                else {
+                    this.subscribeBtn.setText("Subscribe");
+                }
+            } else {
+                this.subscribeBtn.setVisible(false);
+            }
         });
     }
 }

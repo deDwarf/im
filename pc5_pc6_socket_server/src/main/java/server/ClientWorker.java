@@ -11,7 +11,6 @@ import java.net.Socket;
 import java.util.List;
 
 public class ClientWorker extends BaseClient {
-    private String username;
     private boolean isAuthorized;
     private ServiceMessage serverMessageTemplate = new ServiceMessage(ServiceMessage.Type.INFO);
 
@@ -57,8 +56,33 @@ public class ClientWorker extends BaseClient {
                 sendMessage(serverMessageTemplate);
             }
             else if (msgType == ServiceMessage.Type.GET_UNDELIVERED_MESSAGES) {
-                List<ChatMessage> msgs = Server.getInstance().getDb().getMessagesUndeliveredToUser(username);
+                List<ChatMessage> msgs = Database.getInstance().getMessagesUndeliveredToUser(username);
                 msgs.forEach(this::sendMessage);
+            }
+            else if (msgType == ServiceMessage.Type.GET_GROUP_LIST) {
+                Iterable<String> groups = Database.getInstance().getGroupList();
+                serverMessageTemplate.setMsgType(msgType);
+                serverMessageTemplate.setMessage(String.join(",", groups));
+                sendMessage(serverMessageTemplate);
+            }
+            else if (msgType == ServiceMessage.Type.SUBSCRIBE_GROUP) {
+                String groupName = ((ServiceMessage) msg).getMessage();
+                System.out.println("LOG: subscribe to " + groupName);
+                GroupClient cl = Server.getInstance().getGroups().get(groupName);
+                if (cl != null) {
+                    cl.subscribe(this);
+                    sendMessage(msg);
+                }
+            }
+            else if (msgType == ServiceMessage.Type.UNSUBSCRIBE_GROUP) {
+                String groupName = ((ServiceMessage) msg).getMessage();
+                System.out.println("LOG: unsubscribe from " + groupName);
+                GroupClient cl = Server.getInstance().getGroups().get(groupName);
+                if (cl != null) {
+                    cl.unSubscribe(this);
+                    sendMessage(msg);
+                }
+                sendMessage(msg);
             }
         }
 
@@ -108,8 +132,8 @@ public class ClientWorker extends BaseClient {
         this.username = username;
     }
 
-    public Socket getSocket() {
-        return mySocket;
+    public String getAddress() {
+        return mySocket.getInetAddress().toString();
     }
 
     /// ------ ///

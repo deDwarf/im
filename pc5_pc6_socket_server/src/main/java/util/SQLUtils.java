@@ -7,24 +7,22 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class SQLUtils {
 
     private static final String USERS_TABLE_NAME = "Users";
-    private static final String SELECT_USERS = String.format("SELECT * FROM %s", USERS_TABLE_NAME);
+    private static final String SELECT_USERS = String.format("SELECT * FROM %s where is_group = False", USERS_TABLE_NAME);
+    private static final String SELECT_GROUPS = String.format("SELECT * FROM %s where is_group = True", USERS_TABLE_NAME);
     private static final String CREATE_TABLE_USERS =
-            String.format("CREATE TABLE IF NOT EXISTS %s (username varchar(50), password varchar(50))", USERS_TABLE_NAME);
+            String.format("CREATE TABLE IF NOT EXISTS %s (username varchar(50), password varchar(50), is_group boolean)"
+                    , USERS_TABLE_NAME);
 
     private static final String MESSAGES_TABLE_NAME = "Messages";
     private static final String CREATE_TABLE_MESSAGES =
             String.format("CREATE TABLE IF NOT EXISTS %s " +
                     "(from_usr varchar(50), to varchar(50), message varchar(500), delivered boolean)"
                     , MESSAGES_TABLE_NAME);
-
 
 
     public static Map<String, String> getUserWithCredentialsList(Connection con){
@@ -43,10 +41,36 @@ public class SQLUtils {
         return map;
     }
 
+    public static Set<String> getGroups(Connection con) {
+        Set<String> groups = new HashSet<>();
+        try {
+            Statement statement = con.createStatement();
+            ResultSet rs = statement.executeQuery(SELECT_GROUPS);
+            while (rs.next()){
+                String groupName = rs.getString("username");
+                groups.add(groupName);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return groups;
+    }
+
     public static void addUser(Connection con, String username, String pwd) throws SQLException{
         Statement statement = con.createStatement();
         statement.executeUpdate(String.format(
-                "INSERT INTO %s VALUES('%s', '%s')", USERS_TABLE_NAME, username, pwd));
+                "INSERT INTO %s VALUES('%s', '%s', False)", USERS_TABLE_NAME, username, pwd));
+    }
+
+    public static void addGroup(Connection con, String groupName) {
+        Statement statement = null;
+        try {
+            statement = con.createStatement();
+            statement.executeUpdate(String.format(
+                    "INSERT INTO %s VALUES('%s', 'N/A', True)", USERS_TABLE_NAME, groupName));
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     public static boolean checkCredentials(Connection con, String username, String pwd){
@@ -87,6 +111,7 @@ public class SQLUtils {
         }
     }
 
+
     public static void createMessagesTableIfNotExists(Connection con) {
         Statement statement;
         try {
@@ -119,6 +144,7 @@ public class SQLUtils {
                 ChatMessage msg = new ChatMessage(
                         rs.getString("from_usr"),
                         rs.getString("to"),
+                        rs.getString("from_usr"),
                         rs.getString("message")
                 );
                 messages.add(msg);

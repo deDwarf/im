@@ -4,7 +4,9 @@ public class ServiceMessage extends Message {
     public enum Type {
         INFO, REQUIRE_AUTH, AUTH_SUCCESS,
         AUTH_FAIL, ERROR, CONNECTION_CLOSED,
-        GET_ONLINE_LIST, GET_USER_LIST, GET_UNDELIVERED_MESSAGES
+
+        GET_ONLINE_LIST, GET_USER_LIST, GET_UNDELIVERED_MESSAGES,
+        GET_GROUP_LIST, SUBSCRIBE_GROUP, UNSUBSCRIBE_GROUP
     }
     public static final transient String HEADER = "YECA/0.1 Service";
 
